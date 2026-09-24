@@ -273,46 +273,53 @@
                 });
         }
 
-        function requestNotificationPermission() {
-            initAudio(); // Unlock audio on user gesture
-            
-            if (!('Notification' in window)) {
-                alert('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน Push Notification');
-                return;
-            }
+        async function requestNotificationPermission() {
+    initAudio(); // Unlock audio on user gesture
+    
+    if (!('Notification' in window)) {
+        alert('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน Push Notification');
+        return;
+    }
 
-            Notification.requestPermission().then((permission) => {
-                const statusEl = document.getElementById('pushStatus');
-                statusEl.innerText = permission;
+    try {
+        const permission = await Notification.requestPermission();
+        const statusEl = document.getElementById('pushStatus');
+        statusEl.innerText = permission;
 
-                if (permission === 'granted') {
-                    statusEl.className = "font-bold text-emerald-400";
-                    statusEl.innerText = "กำลังสร้าง Token...";
+        if (permission === 'granted') {
+            statusEl.className = "font-bold text-emerald-400";
+            statusEl.innerText = "กำลังสร้าง Token...";
 
-                    if (messaging) {
-                        messaging.getToken({ vapidKey: vapidKey })
-                            .then((currentToken) => {
-                                if (currentToken) {
-                                    console.log('FCM Device Token:', currentToken);
-                                    statusEl.innerText = "เชื่อมต่อระบบ FCM แล้ว";
-                                    saveTokenToFirestore(currentToken);
-                                } else {
-                                    statusEl.innerText = "ไม่พบ Token";
-                                    statusEl.className = "font-bold text-red-400";
-                                }
-                            })
-                            .catch((err) => {
-                                console.error('Error getting FCM Token:', err);
-                                statusEl.innerText = "เกิดข้อผิดพลาด Token";
-                                statusEl.className = "font-bold text-red-400";
-                            });
-                    }
-                } else if (permission === 'denied') {
+            // 1. บังคับลงทะเบียน Service Worker ในโฟลเดอร์ปัจจุบัน (แก้ปัญหา GitHub Pages)
+            const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+
+            if (messaging) {
+                // 2. แนบ registration ไปด้วยเพื่อให้ Firebase รู้ว่าไฟล์อยู่ตรงไหน
+                const currentToken = await messaging.getToken({ 
+                    vapidKey: vapidKey,
+                    serviceWorkerRegistration: registration 
+                });
+
+                if (currentToken) {
+                    console.log('FCM Device Token:', currentToken);
+                    statusEl.innerText = "เชื่อมต่อระบบ FCM แล้ว";
+                    saveTokenToFirestore(currentToken);
+                } else {
+                    statusEl.innerText = "ไม่พบ Token";
                     statusEl.className = "font-bold text-red-400";
-                    statusEl.innerText = "ถูกปฏิเสธ (Denied)";
                 }
-            });
+            }
+        } else if (permission === 'denied') {
+            statusEl.className = "font-bold text-red-400";
+            statusEl.innerText = "ถูกปฏิเสธ (Denied)";
         }
+    } catch (err) {
+        console.error('Error getting FCM Token:', err);
+        const statusEl = document.getElementById('pushStatus');
+        statusEl.innerText = "เกิดข้อผิดพลาด Token";
+        statusEl.className = "font-bold text-red-400";
+    }
+}
 
         function saveTokenToFirestore(token) {
             if (!db) return;
