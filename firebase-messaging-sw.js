@@ -1,8 +1,7 @@
-// นำเข้า Firebase SDK สำหรับ Service Worker
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-// ใส่ Config ของคุณ (ก๊อปปี้มาจากใน HTML)
+// 1. ใส่ Config ของโปรเจกต์ (เหมือนใน index.html)
 firebase.initializeApp({
     apiKey: "AIzaSyBR_9imKY8Fgk2j3Qnm31ERaxKj3cVhRh4",
     authDomain: "my-cell-broadcast.firebaseapp.com",
@@ -14,37 +13,43 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ฟังก์ชันนี้จะทำงานเมื่อ "ปิดแอป" หรือ "ล็อคหน้าจอ"
+// 2. ดักจับข้อความตอนที่ปิดหน้าเว็บ (Background Message)
 messaging.onBackgroundMessage(function(payload) {
-    console.log('[firebase-messaging-sw.js] ได้รับข้อความเบื้องหลัง', payload);
+  console.log('ได้รับข้อความขณะปิดหน้าเว็บ:', payload);
 
-    const notificationTitle = payload.notification.title;
-    const notificationOptions = {
-        body: payload.notification.body,
-        icon: 'https://cdn-icons-png.flaticon.com/512/1157/1157046.png',
-        badge: 'https://cdn-icons-png.flaticon.com/512/1157/1157046.png',
-        vibrate: [1000, 500, 1000, 500, 1000, 500],
-        requireInteraction: true, // บังคับให้อยู่บนหน้าจอล็อคจนกว่าจะกด
-        tag: 'eas-alert-fcm',
-        renotify: true
-    };
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'EMERGENCY ALERT';
+  
+  const notificationOptions = {
+    body: payload.notification?.body || payload.data?.body || 'มีประกาศเตือนภัยฉุกเฉิน',
+    icon: 'https://cdn-icons-png.flaticon.com/512/1039/1039949.png', // ไอคอนสัญลักษณ์เตือนภัย
+    badge: 'https://cdn-icons-png.flaticon.com/512/1039/1039949.png',
+    requireInteraction: true, // บังคับให้ป๊อปอัปค้างบนหน้าจอจนกว่าผู้ใช้จะกดปัดทิ้ง
+    vibrate: [500, 250, 500, 250, 500, 250, 1000, 500, 1000], // แพทเทิร์นการสั่นแบบเตือนภัยรุนแรง
+    data: {
+      url: './' // ลิงก์ที่จะเปิดเมื่อกดที่ป๊อปอัปแจ้งเตือน
+    }
+  };
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// เมื่อผู้ใช้กดที่การแจ้งเตือน
+// 3. ตั้งค่าเมื่อผู้ใช้กดที่การแจ้งเตือน (ให้เด้งเปิดหน้าเว็บขึ้นมา)
 self.addEventListener('notificationclick', function(event) {
-    event.notification.close();
-    event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-            if (clientList.length > 0) {
-                let client = clientList[0];
-                for (let i = 0; i < clientList.length; i++) {
-                    if (clientList[i].focused) client = clientList[i];
-                }
-                return client.focus();
-            }
-            return clients.openWindow('/index.html');
-        })
-    );
+  event.notification.close(); // ปิดป๊อปอัปแจ้งเตือน
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(windowClients => {
+      // ถ้าเปิดหน้าเว็บค้างไว้อยู่แล้ว ให้สลับหน้าจอไปหา
+      for (let i = 0; i < windowClients.length; i++) {
+        let client = windowClients[i];
+        if (client.url.indexOf(self.registration.scope) !== -1 && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // ถ้าปิดเว็บไปแล้ว ให้เปิดหน้าต่างเว็บขึ้นมาใหม่
+      if (clients.openWindow) {
+        return clients.openWindow('./');
+      }
+    })
+  );
 });
