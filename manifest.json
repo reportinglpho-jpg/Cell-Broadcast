@@ -1,0 +1,21 @@
+{
+  "short_name": "EAS Alert",
+  "name": "Cell Broadcast Warning System",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1157/1157046.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1157/1157046.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#0f172a",
+  "theme_color": "#dc2626",
+  "display": "standalone",
+  "orientation": "portrait"
+}

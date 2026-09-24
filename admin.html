@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EAS Admin Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <!-- ================= 1. LOGIN SCREEN ================= -->
+    <div id="loginSection" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 bg-red-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl shadow-lg">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h1 class="text-xl font-bold text-white">ศูนย์ควบคุมการส่งสัญญาณ (EAS)</h1>
+                <p class="text-xs text-slate-400">กรุณาเข้าสู่ระบบก่อนการใช้งาน</p>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+                    <input type="text" id="loginUser" required placeholder="admin" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+                    <input type="password" id="loginPass" required placeholder="••••••••" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500">
+                </div>
+                <button type="submit" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-lg shadow-red-900/40">
+                    เข้าสู่ระบบ (Login)
+                </button>
+            </form>
+            <div class="text-center pt-2">
+                <a href="index.html" class="text-xs text-slate-500 hover:text-slate-300"><i class="fa-solid fa-arrow-left mr-1"></i>กลับไปยังหน้าผู้ใช้งาน</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 2. ADMIN DASHBOARD ================= -->
+    <div id="dashboardSection" class="hidden min-h-screen flex flex-col">
+        <!-- Top Navbar -->
+        <header class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-30">
+            <div class="max-w-5xl mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-red-600 rounded-xl text-white">
+                        <i class="fa-solid fa-tower-cell"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base">EAS Emergency Control Center</h1>
+                        <p class="text-xs text-slate-400">ระบบจัดการแอดมินและการส่งสัญญาณ</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="currentUserDisplay" class="text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300">
+                        <i class="fa-solid fa-user-check text-green-400 mr-1"></i> <span id="usernameLabel">Admin</span>
+                    </span>
+                    <button onclick="handleLogout()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-lg text-slate-300 transition">
+                        <i class="fa-solid fa-right-from-bracket mr-1"></i>ออก
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="max-w-5xl mx-auto w-full p-4 md:p-6 space-y-6 flex-1">
+            
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-slate-700 gap-4 text-sm font-semibold">
+                <button id="tabBtnBroadcast" onclick="switchAdminTab('broadcast')" class="pb-3 text-red-500 border-b-2 border-red-500 flex items-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i> ศูนย์ส่งสัญญาณเตือนภัย
+                </button>
+                <button id="tabBtnAdmins" onclick="switchAdminTab('admins')" class="pb-3 text-slate-400 hover:text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-users-gear"></i> จัดการแอดมิน (Admin Management)
+                </button>
+            </div>
+
+            <!-- TAB 1: BROADCAST CENTER -->
+            <div id="tabContentBroadcast" class="space-y-6">
+                <!-- Form Broadcast -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
+                    <h2 id="formTitleText" class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-bullhorn text-red-500"></i> พิมพ์ข้อความและส่งแจ้งเตือน
+                    </h2>
+
+                    <form onsubmit="submitBroadcast(event)" class="space-y-4">
+                        <input type="hidden" id="editAlertId" value="">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">หัวข้อการแจ้งเตือน (Alert Title)</label>
+                            <input type="text" id="alertTitle" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-red-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">รายละเอียดข้อความ (Alert Body)</label>
+                            <textarea id="alertBody" rows="3" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-red-500"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">ระดับความรุนแรง</label>
+                            <select id="alertSeverity" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white">
+                                <option value="Info">Info (แจ้งเพื่อทราบ)</option>
+                                <option value="Warning">Warning (เตือนภัย)</option>
+                                <option value="Emergency" selected>Emergency (ฉุกเฉินสูงสุด)</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" id="btnSubmitAlert" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-broadcast-tower"></i> กระจายสัญญาณแจ้งเตือน
+                            </button>
+                            <button type="button" id="btnCancelAlertEdit" onclick="resetAlertForm()" class="hidden bg-slate-700 hover:bg-slate-600 px-4 py-3 rounded-xl text-sm">
+                                ยกเลิกแก้ไข
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Alert History / Manage List -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-300">ประวัติการส่งสัญญาณเตือนภัย</h3>
+                    <div id="alertsList" class="space-y-3">
+                        <!-- Alert Items Loaded Here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: ADMIN MANAGEMENT -->
+            <div id="tabContentAdmins" class="hidden space-y-6">
+                <!-- Add Admin Form -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+                    <h2 id="adminFormTitle" class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-blue-500"></i> เพิ่มแอดมินใหม่
+                    </h2>
+                    <form onsubmit="saveAdmin(event)" class="grid md:grid-cols-3 gap-4">
+                        <input type="hidden" id="editAdminId" value="">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+                            <input type="text" id="adminUser" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+                            <input type="password" id="adminPass" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white">
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <button type="submit" id="btnSaveAdmin" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-sm transition">
+                                บันทึกแอดมิน
+                            </button>
+                            <button type="button" id="btnCancelAdminEdit" onclick="resetAdminForm()" class="hidden bg-slate-700 px-3 py-2 rounded-xl text-sm">
+                                ยกเลิก
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Admin List Table -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-300">รายชื่อผู้ดูแลระบบ (Admins)</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-900 text-slate-400 uppercase border-b border-slate-700">
+                                <tr>
+                                    <th class="p-3">Username</th>
+                                    <th class="p-3">Password</th>
+                                    <th class="p-3 text-right">จัดการ (Action)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminsTableBody" class="divide-y divide-slate-700/60">
+                                <!-- Admin rows rendered here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // FIREBASE CONFIG
+        const firebaseConfig = {
+            apiKey: "AIzaSyBR_9imKY8Fgk2j3Qnm31ERaxKj3cVhRh4",
+            authDomain: "my-cell-broadcast.firebaseapp.com",
+            projectId: "my-cell-broadcast",
+            storageBucket: "my-cell-broadcast.firebasestorage.app",
+            messagingSenderId: "603661976960",
+            appId: "1:603661976960:web:e318fd41469858e408ad65"
+        };
+
+        let db = null;
+        try {
+            // เปลี่ยนเงื่อนไขให้ยอมเชื่อมต่อถ้ามี API Key
+            if (firebaseConfig.apiKey) {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+            }
+        } catch (e) { console.error(e); }
+
+        // INITIALIZE LOCAL ADMINS DATA STORE
+        if (!localStorage.getItem('eas_admins')) {
+            const defaultAdmins = [{ id: '1', user: 'admin', pass: '20033457' }];
+            localStorage.setItem('eas_admins', JSON.stringify(defaultAdmins));
+        }
+
+        let localAlerts = JSON.parse(localStorage.getItem('eas_alerts') || '[]');
+
+        // AUTHENTICATION
+        function handleLogin(event) {
+            event.preventDefault();
+            const u = document.getElementById('loginUser').value.trim();
+            const p = document.getElementById('loginPass').value.trim();
+
+            const admins = JSON.parse(localStorage.getItem('eas_admins'));
+            const found = admins.find(a => a.user === u && a.pass === p);
+
+            if (found) {
+                sessionStorage.setItem('eas_logged_in', u);
+                showDashboard(u);
+            } else {
+                alert('Username หรือ Password ไม่ถูกต้อง!');
+            }
+        }
+
+        function handleLogout() {
+            sessionStorage.removeItem('eas_logged_in');
+            document.getElementById('dashboardSection').classList.add('hidden');
+            document.getElementById('loginSection').classList.remove('hidden');
+        }
+
+        function showDashboard(username) {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            document.getElementById('usernameLabel').innerText = username;
+            renderAdminsTable();
+            renderAlertsList();
+        }
+
+        // Check Session on Load
+        window.onload = () => {
+            const loggedUser = sessionStorage.getItem('eas_logged_in');
+            if (loggedUser) {
+                showDashboard(loggedUser);
+            }
+        };
+
+        // TAB SWITCHING
+        function switchAdminTab(tab) {
+            const btnBroadcast = document.getElementById('tabBtnBroadcast');
+            const btnAdmins = document.getElementById('tabBtnAdmins');
+            const contentBroadcast = document.getElementById('tabContentBroadcast');
+            const contentAdmins = document.getElementById('tabContentAdmins');
+
+            if (tab === 'broadcast') {
+                contentBroadcast.classList.remove('hidden');
+                contentAdmins.classList.add('hidden');
+                btnBroadcast.className = "pb-3 text-red-500 border-b-2 border-red-500 flex items-center gap-2 font-semibold";
+                btnAdmins.className = "pb-3 text-slate-400 hover:text-slate-200 flex items-center gap-2 font-semibold";
+            } else {
+                contentAdmins.classList.remove('hidden');
+                contentBroadcast.classList.add('hidden');
+                btnAdmins.className = "pb-3 text-blue-500 border-b-2 border-blue-500 flex items-center gap-2 font-semibold";
+                btnBroadcast.className = "pb-3 text-slate-400 hover:text-slate-200 flex items-center gap-2 font-semibold";
+            }
+        }
+
+        // ================= MANAGING ADMINS =================
+        function renderAdminsTable() {
+            const admins = JSON.parse(localStorage.getItem('eas_admins') || '[]');
+            const tbody = document.getElementById('adminsTableBody');
+            tbody.innerHTML = '';
+
+            admins.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30";
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold text-slate-200">${item.user}</td>
+                    <td class="p-3 font-mono text-slate-400">••••••••</td>
+                    <td class="p-3 text-right space-x-2">
+                        <button onclick="editAdmin('${item.id}')" class="p-1.5 bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600 hover:text-white rounded-lg transition" title="แก้ไข">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="deleteAdmin('${item.id}')" class="p-1.5 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded-lg transition" title="ลบ">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function saveAdmin(event) {
+            event.preventDefault();
+            const editId = document.getElementById('editAdminId').value;
+            const u = document.getElementById('adminUser').value.trim();
+            const p = document.getElementById('adminPass').value.trim();
+
+            let admins = JSON.parse(localStorage.getItem('eas_admins') || '[]');
+
+            if (editId) {
+                // Update Existing
+                admins = admins.map(a => a.id === editId ? { ...a, user: u, pass: p } : a);
+            } else {
+                // Add New
+                admins.push({ id: Date.now().toString(), user: u, pass: p });
+            }
+
+            localStorage.setItem('eas_admins', JSON.stringify(admins));
+            resetAdminForm();
+            renderAdminsTable();
+            alert('บันทึกข้อมูลแอดมินเรียบร้อย');
+        }
+
+        function editAdmin(id) {
+            const admins = JSON.parse(localStorage.getItem('eas_admins') || '[]');
+            const item = admins.find(a => a.id === id);
+            if (item) {
+                document.getElementById('editAdminId').value = item.id;
+                document.getElementById('adminUser').value = item.user;
+                document.getElementById('adminPass').value = item.pass;
+                document.getElementById('adminFormTitle').innerText = 'แก้ไขข้อมูลแอดมิน';
+                document.getElementById('btnCancelAdminEdit').classList.remove('hidden');
+            }
+        }
+
+        function deleteAdmin(id) {
+            let admins = JSON.parse(localStorage.getItem('eas_admins') || '[]');
+            if (admins.length <= 1) {
+                alert('ไม่สามารถลบแอดมินคนสุดท้ายได้!');
+                return;
+            }
+            if (confirm('คุณต้องการลบแอดมินรายนี้ใช่หรือไม่?')) {
+                admins = admins.filter(a => a.id !== id);
+                localStorage.setItem('eas_admins', JSON.stringify(admins));
+                renderAdminsTable();
+            }
+        }
+
+        function resetAdminForm() {
+            document.getElementById('editAdminId').value = '';
+            document.getElementById('adminUser').value = '';
+            document.getElementById('adminPass').value = '';
+            document.getElementById('adminFormTitle').innerText = 'เพิ่มแอดมินใหม่';
+            document.getElementById('btnCancelAdminEdit').classList.add('hidden');
+        }
+
+        // ================= MANAGING BROADCASTS =================
+        async function submitBroadcast(event) {
+            event.preventDefault();
+            const editId = document.getElementById('editAlertId').value;
+            const title = document.getElementById('alertTitle').value;
+            const body = document.getElementById('alertBody').value;
+            const severity = document.getElementById('alertSeverity').value;
+
+            const alertData = {
+                title, body, severity,
+                timestamp: new Date().getTime()
+            };
+
+            if (db) {
+                if (editId) {
+                    await db.collection('alerts').doc(editId).update(alertData);
+                } else {
+                    await db.collection('alerts').add(alertData);
+                }
+            } else {
+                // Local Fallback
+                if (editId) {
+                    localAlerts = localAlerts.map(a => a.id === editId ? { ...alertData, id: editId } : a);
+                } else {
+                    localAlerts.unshift({ ...alertData, id: Date.now().toString() });
+                }
+                localStorage.setItem('eas_alerts', JSON.stringify(localAlerts));
+            }
+
+            resetAlertForm();
+            renderAlertsList();
+            alert('ส่งสัญญาณบรอดแคสต์เรียบร้อย!');
+        }
+
+        function renderAlertsList() {
+            const container = document.getElementById('alertsList');
+            container.innerHTML = '';
+
+            if (db) {
+                db.collection('alerts').orderBy('timestamp', 'desc').limit(10).get().then(snapshot => {
+                    snapshot.forEach(doc => renderSingleAlertItem(container, { id: doc.id, ...doc.data() }));
+                });
+            } else {
+                localAlerts.forEach(item => renderSingleAlertItem(container, item));
+            }
+        }
+
+        function renderSingleAlertItem(container, item) {
+            const div = document.createElement('div');
+            div.className = "bg-slate-900 p-4 rounded-xl border border-slate-700/80 flex justify-between items-start gap-4";
+            div.innerHTML = `
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.severity === 'Emergency' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'}">${item.severity}</span>
+                        <h4 class="font-bold text-sm text-white">${item.title}</h4>
+                    </div>
+                    <p class="text-xs text-slate-400">${item.body}</p>
+                    <span class="text-[10px] text-slate-500 block">${new Date(item.timestamp).toLocaleString('th-TH')}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="editAlert('${item.id}', '${escape(item.title)}', '${escape(item.body)}', '${item.severity}')" class="p-1.5 bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600 hover:text-white rounded-lg transition" title="แก้ไข">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button onclick="deleteAlert('${item.id}')" class="p-1.5 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded-lg transition" title="ลบ">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function editAlert(id, titleEsc, bodyEsc, severity) {
+            document.getElementById('editAlertId').value = id;
+            document.getElementById('alertTitle').value = unescape(titleEsc);
+            document.getElementById('alertBody').value = unescape(bodyEsc);
+            document.getElementById('alertSeverity').value = severity;
+            document.getElementById('formTitleText').innerText = 'แก้ไขข้อความแจ้งเตือน';
+            document.getElementById('btnSubmitAlert').innerText = 'บันทึกการแก้ไขข้อความ';
+            document.getElementById('btnCancelAlertEdit').classList.remove('hidden');
+        }
+
+        async function deleteAlert(id) {
+            if (confirm('คุณต้องการลบข้อความแจ้งเตือนนี้ใช่หรือไม่?')) {
+                if (db) {
+                    await db.collection('alerts').doc(id).delete();
+                } else {
+                    localAlerts = localAlerts.filter(a => a.id !== id);
+                    localStorage.setItem('eas_alerts', JSON.stringify(localAlerts));
+                }
+                renderAlertsList();
+            }
+        }
+
+        function resetAlertForm() {
+            document.getElementById('editAlertId').value = '';
+            document.getElementById('alertTitle').value = '';
+            document.getElementById('alertBody').value = '';
+            document.getElementById('alertSeverity').value = 'Emergency';
+            document.getElementById('formTitleText').innerText = 'พิมพ์ข้อความและส่งแจ้งเตือน';
+            document.getElementById('btnSubmitAlert').innerText = 'กระจายสัญญาณแจ้งเตือน';
+            document.getElementById('btnCancelAlertEdit').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

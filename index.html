@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EAS Broadcast Receiver</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#dc2626">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (compat mode) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between font-sans antialiased">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-red-600 rounded-xl text-white animate-pulse">
+                    <i class="fa-solid fa-tower-broadcast text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">Cell Broadcast Warning</h1>
+                    <p class="text-xs text-slate-400">ระบบรับสัญญาณแจ้งเตือนภัยฉุกเฉิน</p>
+                </div>
+            </div>
+            <a href="admin.html" class="text-xs text-slate-400 hover:text-white bg-slate-700/50 px-2.5 py-1.5 rounded-lg border border-slate-600">
+                <i class="fa-solid fa-user-shield mr-1"></i>แอดมิน
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Receiver Content -->
+    <main class="max-w-md mx-auto w-full p-4 flex-1 flex flex-col justify-center space-y-6">
+        
+        <!-- Status Card -->
+        <div class="bg-slate-800/80 border border-slate-700 rounded-3xl p-6 text-center space-y-5 shadow-xl">
+            <div class="w-20 h-20 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full mx-auto flex items-center justify-center">
+                <i class="fa-solid fa-shield-halved text-3xl animate-pulse"></i>
+            </div>
+            <div>
+                <h2 class="text-lg font-bold text-white">ระบบเฝ้าระวังพร้อมทำงาน</h2>
+                <p class="text-xs text-slate-400 mt-1">คอยรับสัญญาณเตือนภัยแบบเรียลไทม์ตลอด 24 ชั่วโมง</p>
+            </div>
+
+            <div class="pt-2 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-xs">
+                <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
+                    <span class="text-slate-400 block text-[10px]">สถานะ Push (FCM)</span>
+                    <span id="pushStatus" class="font-bold text-yellow-400">รอยืนยัน</span>
+                </div>
+                <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
+                    <span class="text-slate-400 block text-[10px]">ระบบเสียงเตือนภัย (EAS)</span>
+                    <span class="font-bold text-emerald-400">พร้อมทำงาน</span>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button onclick="requestNotificationPermission()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30">
+                    <i class="fa-solid fa-bell"></i> เปิดรับการแจ้งเตือน (Enable Push)
+                </button>
+            </div>
+        </div>
+
+        <!-- Installation Instruction -->
+        <div class="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 text-xs text-slate-300 space-y-2">
+            <div class="font-bold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-mobile-screen-button text-red-400"></i> วิธีติดตั้งลงหน้าจอมือถือ (PWA)
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+                • <b>iOS (Safari):</b> กดปุ่ม Share <i class="fa-solid fa-share-from-square"></i> -> เลือก <b>"Add to Home Screen"</b><br>
+                • <b>Android (Chrome):</b> กดเมนู 3 จุด <i class="fa-solid fa-ellipsis-vertical"></i> -> เลือก <b>"Install App"</b>
+            </p>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center p-4 text-xs text-slate-500 border-t border-slate-800">
+        Organization Emergency Alert System &copy; PWA & FCM Ready
+    </footer>
+
+    <!-- Emergency Modal Alert Overlay -->
+    <div id="emergencyModal" class="hidden fixed inset-0 bg-red-600 z-50 p-6 flex flex-col justify-between text-white animate-bounce-short">
+        <div class="pt-10 text-center space-y-4 max-w-md mx-auto w-full">
+            <div class="w-20 h-20 bg-white/20 rounded-full mx-auto flex items-center justify-center animate-ping">
+                <i class="fa-solid fa-triangle-exclamation text-4xl text-white"></i>
+            </div>
+            <div class="inline-block bg-black/40 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase border border-white/20">
+                <i class="fa-solid fa-bullhorn mr-1"></i> <span id="alertSeverityText">EMERGENCY ALERT</span>
+            </div>
+            <h2 id="alertTitle" class="text-2xl font-black leading-tight">แจ้งเตือนฉุกเฉินระดับสูงสุด</h2>
+            <div class="bg-black/30 p-4 rounded-xl border border-white/20 text-left text-sm leading-relaxed max-h-60 overflow-y-auto" id="alertBody">
+                ข้อความแจ้งเตือนภัย...
+            </div>
+        </div>
+        <div class="max-w-md mx-auto w-full pb-6">
+            <button onclick="stopEmergencyAlert()" class="w-full bg-white text-red-700 font-black py-4 rounded-xl text-center shadow-2xl active:scale-95 transition text-base">
+                รับทราบ (OK / DISMISS)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // FIREBASE CONFIGURATION
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBR_9imKY8Fgk2j3Qnm31ERaxKj3cVhRh4",
+            authDomain: "my-cell-broadcast.firebaseapp.com",
+            projectId: "my-cell-broadcast",
+            storageBucket: "my-cell-broadcast.firebasestorage.app",
+            messagingSenderId: "603661976960",
+            appId: "1:603661976960:web:e318fd41469858e408ad65"
+        };
+
+        const vapidKey = "BF6dle0veIkSwJ7sfrkE3TiPkuX0JZ0y5SKvQNWjay-8HxWHtWZ4yIzBd3Q006oqFlV2b5FiQOdY_z_xbQRkWCg";
+
+        let db = null;
+        let messaging = null;
+
+        try {
+            if (firebaseConfig.apiKey) {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                messaging = firebase.messaging();
+                listenForAlerts();
+            }
+        } catch (e) { console.error("Firebase Init Error:", e); }
+
+        // ==========================================
+        // CELL BROADCAST AUDIO ENGINE
+        // ==========================================
+        let audioCtx = null;
+        let oscillators = [];
+        let weaIntervalId = null;
+        let isSoundPlaying = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSiren() {
+            if (isSoundPlaying) return;
+            initAudio();
+            
+            try {
+                isSoundPlaying = true;
+
+                const playDualToneBeep = (duration) => {
+                    if (!isSoundPlaying || !audioCtx) return;
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                    const gainNode = audioCtx.createGain();
+                    const osc1 = audioCtx.createOscillator();
+                    const osc2 = audioCtx.createOscillator();
+
+                    osc1.type = 'square';
+                    osc2.type = 'square';
+                    osc1.frequency.setValueAtTime(853, audioCtx.currentTime); 
+                    osc2.frequency.setValueAtTime(960, audioCtx.currentTime);
+
+                    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+
+                    osc1.connect(gainNode);
+                    osc2.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+
+                    osc1.start();
+                    osc2.start();
+                    oscillators.push(osc1, osc2);
+
+                    setTimeout(() => {
+                        try {
+                            osc1.stop();
+                            osc2.stop();
+                        } catch (e) {}
+                    }, duration);
+                };
+
+                const playWEAPattern = () => {
+                    if (!isSoundPlaying) return;
+                    playDualToneBeep(2000); 
+                    setTimeout(() => { playDualToneBeep(1000); }, 2500); 
+                    setTimeout(() => { playDualToneBeep(1000); }, 4000); 
+                };
+
+                playWEAPattern();
+                weaIntervalId = setInterval(playWEAPattern, 6000);
+
+            } catch (e) { console.error("Audio Engine Error:", e); }
+        }
+
+        function stopSiren() {
+            isSoundPlaying = false;
+            clearInterval(weaIntervalId);
+            oscillators.forEach(osc => {
+                try { osc.stop(); osc.disconnect(); } catch (e) {}
+            });
+            oscillators = [];
+            
+            if (audioCtx && audioCtx.state === 'running') {
+                audioCtx.suspend();
+            }
+        }
+
+        // ==========================================
+        // ALERT TRIGGER & MODAL LOGIC
+        // ==========================================
+        function triggerEmergencyAlert(data) {
+            document.getElementById('alertTitle').innerText = data.title;
+            document.getElementById('alertBody').innerText = data.body;
+            document.getElementById('alertSeverityText').innerText = (data.severity || 'Emergency') + " ALERT";
+            document.getElementById('emergencyModal').classList.remove('hidden');
+            
+            playSiren();
+        }
+
+        function stopEmergencyAlert() {
+            document.getElementById('emergencyModal').classList.add('hidden');
+            stopSiren();
+        }
+
+        // ==========================================
+        // REALTIME FIRESTORE LISTENER (FOREGROUND BACKUP)
+        // ==========================================
+        let lastProcessedAlertId = null;
+        let isInitialLoad = true;
+
+        function listenForAlerts() {
+            if (!db) return;
+            
+            db.collection('alerts').orderBy('timestamp', 'desc').limit(1)
+                .onSnapshot(snapshot => {
+                    if (snapshot.empty) return;
+
+                    const doc = snapshot.docs[0];
+                    const alertId = doc.id;
+                    const data = doc.data();
+
+                    if (isInitialLoad) {
+                        isInitialLoad = false;
+                        lastProcessedAlertId = alertId;
+                        return;
+                    }
+
+                    if (alertId !== lastProcessedAlertId) {
+                        lastProcessedAlertId = alertId;
+                        triggerEmergencyAlert(data);
+                    }
+                }, error => {
+                    console.error("Firestore Listener Error:", error);
+                });
+        }
+
+        // ==========================================
+        // SERVICE WORKER & FCM PUSH NOTIFICATION SETUP
+        // ==========================================
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./firebase-messaging-sw.js')
+                .then((registration) => {
+                    console.log('FCM Service Worker Registered successfully:', registration);
+                })
+                .catch((err) => {
+                    console.error('Service Worker Registration Failed:', err);
+                });
+        }
+
+        function requestNotificationPermission() {
+            initAudio(); // Unlock audio on user gesture
+            
+            if (!('Notification' in window)) {
+                alert('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน Push Notification');
+                return;
+            }
+
+            Notification.requestPermission().then((permission) => {
+                const statusEl = document.getElementById('pushStatus');
+                statusEl.innerText = permission;
+
+                if (permission === 'granted') {
+                    statusEl.className = "font-bold text-emerald-400";
+                    statusEl.innerText = "กำลังสร้าง Token...";
+
+                    if (messaging) {
+                        messaging.getToken({ vapidKey: vapidKey })
+                            .then((currentToken) => {
+                                if (currentToken) {
+                                    console.log('FCM Device Token:', currentToken);
+                                    statusEl.innerText = "เชื่อมต่อระบบ FCM แล้ว";
+                                    saveTokenToFirestore(currentToken);
+                                } else {
+                                    statusEl.innerText = "ไม่พบ Token";
+                                    statusEl.className = "font-bold text-red-400";
+                                }
+                            })
+                            .catch((err) => {
+                                console.error('Error getting FCM Token:', err);
+                                statusEl.innerText = "เกิดข้อผิดพลาด Token";
+                                statusEl.className = "font-bold text-red-400";
+                            });
+                    }
+                } else if (permission === 'denied') {
+                    statusEl.className = "font-bold text-red-400";
+                    statusEl.innerText = "ถูกปฏิเสธ (Denied)";
+                }
+            });
+        }
+
+        function saveTokenToFirestore(token) {
+            if (!db) return;
+            db.collection('fcmTokens').doc(token).set({
+                token: token,
+                deviceType: 'Web PWA',
+                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).then(() => {
+                console.log('บันทึก FCM Token ลง Firestore เรียบร้อย');
+            }).catch(e => console.error("Error saving token:", e));
+        }
+
+        // รับข้อความ FCM Notification เมื่อเปิดแอปค้างไว้ (Foreground Message)
+        if (messaging) {
+            messaging.onMessage((payload) => {
+                console.log('Received foreground FCM message:', payload);
+                const data = {
+                    title: payload.notification?.title || payload.data?.title || 'แจ้งเตือนฉุกเฉิน',
+                    body: payload.notification?.body || payload.data?.body || '',
+                    severity: payload.data?.severity || 'Emergency'
+                };
+                triggerEmergencyAlert(data);
+            });
+        }
+
+        // Check initial Permission status on load
+        if ('Notification' in window) {
+            const statusEl = document.getElementById('pushStatus');
+            statusEl.innerText = Notification.permission;
+            if (Notification.permission === 'granted') {
+                statusEl.className = "font-bold text-emerald-400";
+            }
+        }
+
+        // Auto unlock Audio context on first user click/touch anywhere
+        window.addEventListener('click', initAudio, { once: true });
+        window.addEventListener('touchstart', initAudio, { once: true });
+    </script>
+</body>
+</html>
